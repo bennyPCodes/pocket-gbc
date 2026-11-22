@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14111c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pocket GBC">
+<title>Pocket GBC</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --bg:#14111c; --panel:#1f1a2b; --panel2:#2a2339; --line:#3a3150;
+  --ink:#f1ecfa; --mute:#a59cb8; --accent:#8b5cf6; --accent2:#22d3ee;
+  --a:#e0457b; --b:#e0457b; --ok:#34d399; --warn:#fbbf24;
+  --pad-opacity:1;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
+  overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.hidden{display:none!important}
+
+/* ---------- Game view ---------- */
+#game{position:fixed;inset:0;display:flex;flex-direction:column;
+  padding:var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l)}
+#topbar{display:flex;align-items:center;gap:6px;padding:6px 10px;height:44px;flex:none}
+#topbar .title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-weight:600;font-size:14px;color:var(--mute)}
+.chip{padding:6px 10px;border-radius:999px;background:var(--panel);font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip:active{background:var(--panel2)}
+.chip.on{background:var(--accent);color:#fff}
+#ffChip.on{background:var(--warn);color:#1a1400}
+#screenWrap{flex:none;display:flex;justify-content:center;align-items:center;padding:4px 10px 0}
+#screenFrame{position:relative;background:#000;border-radius:10px;padding:6px;
+  box-shadow:0 0 0 2px var(--line),0 10px 30px rgba(0,0,0,.5)}
+#gb{display:block;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;border-radius:4px}
+#pausedOverlay{position:absolute;inset:6px;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,8,16,.6);border-radius:4px;font-weight:700;font-size:18px;letter-spacing:.05em}
+#fpsTag{position:absolute;top:10px;right:12px;font:11px ui-monospace,monospace;color:#fff;
+  background:rgba(0,0,0,.5);padding:1px 5px;border-radius:4px;pointer-events:none}
+
+/* ---------- Controls ---------- */
+#controls{position:relative;flex:1;min-height:250px;touch-action:none}
+.ctl{position:absolute;opacity:var(--pad-opacity)}
+#dpad{width:156px;height:156px;left:18px;top:44%;transform:translateY(-50%)}
+#dpad .arm{position:absolute;background:#2f2842;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35)}
+#dpad .h{left:0;right:0;top:52px;height:52px;border-radius:10px}
+#dpad .v{top:0;bottom:0;left:52px;width:52px;border-radius:10px}
+#dpad .hub{position:absolute;left:62px;top:62px;width:32px;height:32px;border-radius:50%;background:#251f35}
+#dpad .dir{position:absolute;width:52px;height:52px;display:flex;align-items:center;justify-content:center;color:#6f6588;font-size:14px}
+#dpad .dir.on{color:#fff}
+#dpad .u{left:52px;top:0}#dpad .d{left:52px;bottom:0}#dpad .l{left:0;top:52px}#dpad .r{right:0;top:52px}
+#dpad.p-up .v{background:linear-gradient(#4a3f68 0 34%,#2f2842 34%)}
+#dpad.p-down .v{background:linear-gradient(#2f2842 66%,#4a3f68 66%)}
+#dpad.p-up.p-down .v{background:#4a3f68}
+#dpad.p-left .h{background:linear-gradient(90deg,#4a3f68 0 34%,#2f2842 34%)}
+#dpad.p-right .h{background:linear-gradient(90deg,#2f2842 66%,#4a3f68 66%)}
+#ab{width:170px;height:130px;right:14px;top:44%;transform:translateY(-55%) rotate(-22deg)}
+.round{position:absolute;width:70px;height:70px;border-radius:50%;background:var(--a);
+  box-shadow:inset 0 -4px 0 rgba(0,0,0,.3),0 3px 10px rgba(0,0,0,.35);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:#fff}
+.round.on{filter:brightness(1.35);transform:scale(.94)}
+#btnA{right:0;top:12px}#btnB{left:6px;top:46px}
+#ss{left:50%;bottom:calc(18px + 4vh);transform:translateX(-50%);display:flex;gap:22px}
+.pill{width:68px;height:24px;border-radius:12px;background:#2f2842;transform:rotate(-22deg);
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.35)}
+.pill.on{background:#5a4d7e}
+.pillWrap{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:10px;font-weight:700;
+  letter-spacing:.1em;color:var(--mute)}
+#quick{left:50%;top:10px;transform:translateX(-50%);display:flex;gap:8px}
+#quick .chip{background:rgba(42,35,57,.9)}
+
+/* Landscape: screen fills height, controls overlay the sides */
+@media (orientation:landscape) and (max-height:600px){
+  #topbar{position:absolute;top:var(--safe-t);left:0;right:0;z-index:5;background:none;pointer-events:none;height:40px}
+  #topbar>*{pointer-events:auto}
+  #topbar .title{visibility:hidden}
+  #screenWrap{position:absolute;inset:0;padding:0}
+  #screenFrame{padding:0;box-shadow:none;border-radius:0;background:none}
+  #controls{position:absolute;inset:0;min-height:0}
+  #dpad{left:calc(20px + var(--safe-l));top:auto;bottom:40px;transform:none}
+  #ab{right:calc(16px + var(--safe-r));top:auto;bottom:46px;transform:rotate(-22deg)}
+  #ss{left:auto;right:calc(22px + var(--safe-r));bottom:6px;transform:none;gap:10px}
+  #ss .pill{width:52px;height:20px}
+  #quick{left:calc(12px + var(--safe-l));top:auto;bottom:6px;transform:none}
+  :root{--pad-opacity:.55}
+}
+
+/* ---------- Sheets / library ---------- */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(8,6,12,.6);display:flex;align-items:flex-end;justify-content:center}
+.sheet .card{width:100%;max-width:560px;max-height:88vh;overflow:auto;background:var(--panel);
+  border-radius:18px 18px 0 0;padding:16px 16px calc(16px + var(--safe-b));-webkit-user-select:none}
+@media (min-width:700px){.sheet{align-items:center}.sheet .card{border-radius:18px}}
+.card h2{margin:0 0 4px;font-size:18px}
+.card h3{margin:18px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:11px 14px;border-radius:12px;background:var(--panel2);font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.btn:active{filter:brightness(1.2)}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.danger{color:#ff8fa8}
+.btn.block{width:100%;justify-content:center}
+.slots{display:flex;flex-direction:column;gap:8px}
+.slot{background:var(--panel2);border-radius:12px;padding:8px;display:grid;grid-template-columns:80px 1fr;grid-template-rows:auto 1fr;column-gap:10px;row-gap:6px}
+.slot .thumb{grid-row:1/3;width:80px;aspect-ratio:160/144;background:#0b0910;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px}
+.slot .thumb img{width:100%;height:100%;image-rendering:pixelated;display:block}
+.slot .meta{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.slot .meta b{color:var(--ink)}
+.slot .acts{display:flex;gap:6px;align-self:end}
+.slot .acts button{flex:1;padding:8px 0;border-radius:8px;background:#362d4a;font-size:13px;font-weight:600}
+.slot .acts button:disabled{opacity:.35}
+.slot .acts .sv{background:var(--accent);color:#fff}
+.setting{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);gap:10px}
+.setting:last-child{border-bottom:0}
+.seg{display:flex;background:var(--panel2);border-radius:10px;padding:3px}
+.seg button{padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600;color:var(--mute)}
+.seg button.on{background:var(--accent);color:#fff}
+.toggle{width:46px;height:28px;border-radius:14px;background:var(--panel2);position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#8c82a3;transition:.15s}
+.toggle.on{background:var(--accent)}.toggle.on::after{left:21px;background:#fff}
+input[type=range]{width:140px;accent-color:var(--accent)}
+
+#library{position:fixed;inset:0;z-index:15;background:var(--bg);overflow:auto;
+  padding:calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(24px + var(--safe-b)) calc(16px + var(--safe-l))}
+.brand{display:flex;align-items:center;gap:12px;margin:4px 0 18px}
+.brand img{width:48px;height:48px;border-radius:12px}
+.brand h1{margin:0;font-size:22px}.brand p{margin:0;color:var(--mute);font-size:13px}
+.drop{border:2px dashed var(--line);border-radius:16px;padding:22px;text-align:center;color:var(--mute);margin-bottom:18px}
+.drop .btn{margin-top:10px}
+.games{display:flex;flex-direction:column;gap:10px;max-width:640px}
+.game{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:14px;padding:10px}
+.game .art{width:64px;height:58px;border-radius:8px;background:#0b0910;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent)}
+.game .art img{width:100%;height:100%;image-rendering:pixelated}
+.game .info{flex:1;min-width:0}
+.game .name{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.game .sub{font-size:12px;color:var(--mute)}
+.game .tag{font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--panel2);color:var(--accent2);margin-right:6px}
+.game .x{padding:10px;color:var(--mute);font-size:18px}
+.empty{color:var(--mute);text-align:center;padding:20px}
+.note{font-size:12px;color:var(--mute);margin-top:18px;max-width:640px}
+#toast{position:fixed;left:50%;top:calc(56px + var(--safe-t));transform:translateX(-50%);z-index:40;
+  background:#000c;color:#fff;padding:9px 14px;border-radius:999px;font-size:14px;font-weight:600;
+  pointer-events:none;opacity:0;transition:opacity .2s}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ========== Library ========== -->
+<section id="library">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="">
+    <div><h1>Pocket GBC</h1><p>Game Boy &amp; Game Boy Color</p></div>
+  </div>
+  <div class="drop" id="drop">
+    <div>Pick a <b>.gb</b>, <b>.gbc</b> or <b>.zip</b> ROM from your phone</div>
+    <button class="btn primary" id="pickRom">＋ Open ROM</button>
+  </div>
+  <div class="games" id="games"></div>
+  <div class="row" style="margin-top:18px;max-width:640px">
+    <button class="btn" id="importStateLib">Import save file</button>
+    <button class="btn" id="exportAllBtn">Back up everything</button>
+    <button class="btn hidden" id="installBtn">⤓ Install app</button>
+  </div>
+  <p class="note" id="installHint"></p>
+  <p class="note">ROMs and saves stay on this device. Battery saves (in-game saves) are kept automatically; save states can be exported to your phone's files.</p>
+</section>
+
+<!-- ========== Game ========== -->
+<section id="game" class="hidden">
+  <div id="topbar">
+    <button class="chip" id="menuBtn">☰ Menu</button>
+    <div class="title" id="gameTitle"></div>
+    <button class="chip" id="ffChip">▶▶ <span id="ffLabel">2×</span></button>
+  </div>
+  <div id="screenWrap">
+    <div id="screenFrame">
+      <canvas id="gb" width="160" height="144"></canvas>
+      <div id="pausedOverlay" class="hidden">PAUSED · tap to resume</div>
+      <div id="fpsTag" class="hidden"></div>
+    </div>
+  </div>
+  <div id="controls">
+    <div class="ctl" id="quick">
+      <button class="chip" id="qsBtn">💾 Save</button>
+      <button class="chip" id="qlBtn">⟲ Load</button>
+    </div>
+    <div class="ctl" id="dpad">
+      <div class="arm h"></div><div class="arm v"></div><div class="hub"></div>
+      <div class="dir u">▲</div><div class="dir d">▼</div><div class="dir l">◀</div><div class="dir r">▶</div>
+    </div>
+    <div class="ctl" id="ab">
+      <div class="round" id="btnB" data-btn="B">B</div>
+      <div class="round" id="btnA" data-btn="A">A</div>
+    </div>
+    <div class="ctl" id="ss">
+      <div class="pillWrap"><div class="pill" id="btnSel" data-btn="SELECT"></div>SELECT</div>
+      <div class="pillWrap"><div class="pill" id="btnStart" data-btn="START"></div>START</div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Menu sheet ========== -->
+<div class="sheet hidden" id="menu">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 id="menuTitle">Menu</h2>
+      <button class="btn" id="closeMenu">Resume ▶</button>
+    </div>
+
+    <h3>Save states</h3>
+    <div class="slots" id="slots"></div>
+
+    <h3>Save to phone</h3>
+    <div class="row">
+      <button class="btn" id="exportStates">⤴ Export this game's saves</button>
+      <button class="btn" id="exportSav">⤴ Export battery .sav</button>
+      <button class="btn" id="importState">⤵ Import save file</button>
+    </div>
+
+    <h3>Settings</h3>
+    <div class="setting"><span>Fast-forward speed</span>
+      <div class="seg" id="ffSpeeds">
+        <button data-v="2">2×</button><button data-v="3">3×</button><button data-v="4">4×</button><button data-v="8">8×</button>
+      </div></div>
+    <div class="setting"><span>Mute while fast-forwarding</span><button class="toggle" data-set="ffMute"></button></div>
+    <div class="setting"><span>Sound</span><button class="toggle" data-set="sound"></button></div>
+    <div class="setting"><span>Vibrate on press <small style="color:var(--mute)">(Android)</small></span><button class="toggle" data-set="haptics"></button></div>
+    <div class="setting"><span>Show FPS</span><button class="toggle" data-set="fps"></button></div>
+    <div class="setting"><span>Button opacity (landscape)</span><input type="range" min="15" max="100" id="opacity"></div>
+
+    <h3>Game</h3>
+    <div class="row">
+      <button class="btn" id="resetBtn">↺ Reset game</button>
+      <button class="btn" id="quitBtn">⌂ Back to library</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet hidden" id="ask" style="z-index:30">
+  <div class="card" style="max-width:420px">
+    <p id="askMsg" style="margin:4px 0 16px;font-size:16px"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn" id="askNo">Cancel</button>
+      <button class="btn primary" id="askYes">OK</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="romInput" class="hidden">
+<input type="file" id="stateInput" class="hidden">
+<div id="toast"></div>
+
+<script src="wasmboy.js"></script>
+<script>
+'use strict';
+const WB = window.WasmBoy.WasmBoy;
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+/* ================= Storage (IndexedDB) ================= */
+const DB = (() => {
+  let p;
+  const open = () => p || (p = new Promise((res, rej) => {
+    const r = indexedDB.open('pocket-gbc', 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      db.createObjectStore('roms', { keyPath: 'id' });
+      const st = db.createObjectStore('states', { keyPath: 'key' });
+      st.createIndex('romId', 'romId');
+      db.createObjectStore('kv');
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+  const tx = async (store, mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction(store, mode);
+      const s = t.objectStore(store);
+      const out = fn(s);
+      t.oncomplete = () => res(out && 'result' in out ? out.result : out);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  };
+  return {
+    get: (st, k) => tx(st, 'readonly', s => s.get(k)),
+    put: (st, v, k) => tx(st, 'readwrite', s => k === undefined ? s.put(v) : s.put(v, k)),
+    del: (st, k) => tx(st, 'readwrite', s => s.delete(k)),
+    all: (st) => tx(st, 'readonly', s => s.getAll()),
+    byRom: (romId) => tx('states', 'readonly', s => s.index('romId').getAll(romId)),
+  };
+})();
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ================= Settings ================= */
+const settings = Object.assign(
+  { ffSpeed: 2, ffMute: false, sound: true, haptics: true, fps: false, opacity: 55 },
+  JSON.parse(localStorage.getItem('pgbc-settings') || '{}'));
+const saveSettings = () => localStorage.setItem('pgbc-settings', JSON.stringify(settings));
+
+/* ================= Helpers ================= */
+let toastT;
+function toast(msg, ms = 1600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+const buzz = (ms = 10) => { if (settings.haptics && navigator.vibrate) try { navigator.vibrate(ms); } catch (e) {} };
+async function hashBytes(u8) {
+  if (crypto.subtle) {
+    const h = await crypto.subtle.digest('SHA-1', u8);
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < u8.length; i++) { h ^= u8[i]; h = Math.imul(h, 16777619) >>> 0; }
+  return 'f' + h.toString(16) + u8.length.toString(16);
+}
+const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = s => { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+const fmtDate = d => new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const safeName = s => s.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'game';
+const readFile = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(new Uint8Array(r.result)); r.onerror = () => rej(r.error); r.readAsArrayBuffer(f); });
+
+/* Minimal ZIP reader (stored + deflate) — picks the first .gb/.gbc inside */
+async function unzipRom(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('Not a valid zip');
+  let off = dv.getUint32(eocd + 16, true); const n = dv.getUint16(eocd + 10, true);
+  const entries = [];
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true);
+    const nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+    const local = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nlen));
+    entries.push({ name, method, csize, local });
+    off += 46 + nlen + elen + clen;
+  }
+  const e = entries.find(e => /\.(gbc|gb|cgb|sgb)$/i.test(e.name));
+  if (!e) throw new Error('No .gb/.gbc file inside the zip');
+  const lnl = dv.getUint16(e.local + 26, true), lel = dv.getUint16(e.local + 28, true);
+  const data = u8.subarray(e.local + 30 + lnl + lel, e.local + 30 + lnl + lel + e.csize);
+  if (e.method === 0) return { name: e.name.split('/').pop(), data: data.slice() };
+  if (e.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('Unsupported zip compression — unzip it first');
+  const out = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+  return { name: e.name.split('/').pop(), data: new Uint8Array(out) };
+}
+
+function romHeader(u8) {
+  let title = '';
+  for (let i = 0x134; i < 0x144 && i < u8.length; i++) { const c = u8[i]; if (c === 0) break; if (c >= 32 && c < 127) title += String.fromCharCode(c); }
+  const cgb = u8[0x143];
+  return { headerTitle: title.trim(), isColor: cgb === 0x80 || cgb === 0xC0, colorOnly: cgb === 0xC0 };
+}
+
+function ask(msg, yes = 'OK') {
+  return new Promise(res => {
+    $('#askMsg').textContent = msg; $('#askYes').textContent = yes;
+    $('#ask').classList.remove('hidden');
+    const done = v => { $('#ask').classList.add('hidden'); $('#askYes').onclick = $('#askNo').onclick = null; res(v); };
+    $('#askYes').onclick = () => done(true); $('#askNo').onclick = () => done(false);
+  });
+}
+
+/* ================= Share / download to phone ================= */
+async function saveToPhone(blob, filename) {
+  // Inside the claude.ai preview the page is sandboxed: use its download capability when present.
+  if (window.claude && window.claude.use) {
+    let dl = null;
+    try { dl = await window.claude.use('downloads'); } catch (e) {}
+    if (dl) {
+      if (/\.sav$/i.test(filename)) { toast('.sav export works in the installed app, not this preview', 2600); return false; }
+      const name = /\.(gbcstate|gbcbackup)$/i.test(filename) ? filename + '.json' : filename;
+      try { await dl.save({ filename: name, data: blob }); toast('Saved ' + name); return true; }
+      catch (e) { if (e && e.code !== 'declined') toast('Could not save: ' + (e.message || e.code), 2600); return false; }
+    }
+  }
+  const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: filename }); return true; }
+    catch (e) { if (e.name === 'AbortError') return false; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  return true;
+}
+
+/* ================= Emulator ================= */
+const canvas = $('#gb');
+let current = null;          // current ROM record
+let running = false;         // user intent: game should be running
+let menuOpen = false;
+let ffOn = false;
+let lastRam = null;
+let emuReady = false;
+
+async function initEmu() {
+  if (emuReady) return;
+  await WB.config({
+    headless: false,
+    isAudioEnabled: true,
+    isGbcEnabled: true,
+    isGbcColorizationEnabled: true,
+    enableBootROMIfAvailable: false,
+    disablePauseOnHidden: false,
+    maxNumberOfAutoSaveStates: 0,
+    frameSkip: 0,
+    audioBatchProcessing: true,
+    audioAccumulateSamples: true,
+    gameboyFrameRate: 60,
+  }, canvas);
+  WB.disableDefaultJoypad();
+  emuReady = true;
+}
+
+function applySound() {
+  try {
+    const ch = WB._getAudioChannels();
+    const mute = !settings.sound || (ffOn && settings.ffMute);
+    ['channel1', 'channel2', 'channel3', 'channel4'].forEach(k => ch[k] && (mute ? ch[k].mute() : ch[k].unmute()));
+  } catch (e) {}
+}
+
+async function play() {
+  if (!current) return;
+  running = true;
+  try { WB.resumeAudioContext(); } catch (e) {}
+  await WB.play();
+  applySound();
+  if (ffOn) WB.setSpeed(settings.ffSpeed);
+  $('#pausedOverlay').classList.add('hidden');
+}
+async function pause(showOverlay = true) {
+  await WB.pause();
+  if (showOverlay) $('#pausedOverlay').classList.remove('hidden');
+}
+
+async function startGame(rec) {
+  showGame();
+  $('#gameTitle').textContent = rec.name;
+  toast('Loading…');
+  await initEmu();
+  await batterySave();               // flush previous game's battery RAM
+  ffOn = false; updateFF();
+  WB.setSpeed(1);
+  await WB.loadROM(rec.data.slice());
+  current = rec; lastRam = null;
+  layout();                          // WasmBoy rewrites the canvas style on init
+  rec.lastPlayed = Date.now();
+  DB.put('roms', rec).catch(() => {});
+  await play();
+  toast(rec.name);
+}
+
+function setFF(on) {
+  ffOn = on; updateFF();
+  if (!current) return;
+  WB.setSpeed(on ? settings.ffSpeed : 1);
+  applySound();
+}
+function updateFF() {
+  $('#ffChip').classList.toggle('on', ffOn);
+  $('#ffLabel').textContent = settings.ffSpeed + '×';
+}
+
+/* ---- Battery (in-game) saves: flush cartridge RAM whenever it changes ---- */
+// WasmBoy keeps battery RAM in its own IndexedDB ('wasmboy' › 'keyval', keyed by the cartridge header).
+// Its saveLoadedCartridge() overwrites fresh RAM with a stale copy, so we update the record directly.
+function writeWasmBoyRam(header, ram) {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('wasmboy');
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains('keyval')) { db.close(); return res(); }
+      const t = db.transaction('keyval', 'readwrite'), st = t.objectStore('keyval');
+      const key = new Uint8Array(header);
+      const g = st.get(key);
+      g.onsuccess = () => { const obj = g.result || {}; obj.cartridgeRam = new Uint8Array(ram); st.put(obj, key); };
+      t.oncomplete = () => { db.close(); res(); };
+      t.onerror = () => { db.close(); rej(t.error); };
+    };
+  });
+}
+async function batterySave() {
+  if (!current) return;
+  try {
+    const info = await WB._getCartridgeInfo();
+    const ram = info && info.RAM;
+    if (!ram || !ram.length) return;
+    const r = new Uint8Array(ram);
+    let changed = !lastRam || lastRam.length !== r.length;
+    if (!changed) for (let i = 0; i < r.length; i++) if (r[i] !== lastRam[i]) { changed = true; break; }
+    if (!changed) return;
+    lastRam = r.slice();
+    await writeWasmBoyRam(info.header, lastRam);        // WasmBoy restores this RAM next time the ROM loads
+    await DB.put('kv', { ram: lastRam, date: Date.now() }, 'sav:' + current.id);   // copy for .sav export
+  } catch (e) { /* not loaded yet */ }
+}
+setInterval(() => { if (running && !document.hidden) batterySave(); }, 4000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!current) return;
+  if (document.hidden) { batterySave(); }
+  else if (running && !menuOpen) { setTimeout(() => play(), 150); }
+});
+window.addEventListener('pagehide', () => batterySave());
+
+/* ---- Save states ---- */
+const SLOTS = 4;
+async function captureState() {
+  const s = await WB.saveState();          // pauses
+  const m = s.wasmboyMemory;
+  const data = {
+    internal: new Uint8Array(m.wasmBoyInternalState),
+    palette: new Uint8Array(m.wasmBoyPaletteMemory),
+    memory: new Uint8Array(m.gameBoyMemory),
+    ram: new Uint8Array(m.cartridgeRam),
+  };
+  try { await WB.deleteState(s); } catch (e) {}  // keep WasmBoy's own store clean; we keep ours
+  return data;
+}
+function thumbnail() {
+  try { return canvas.toDataURL('image/png'); } catch (e) { return null; }
+}
+async function saveSlot(slot) {
+  if (!current) return;
+  const wasRunning = running && !menuOpen;
+  const thumb = thumbnail();
+  const data = await captureState();
+  const rec = { key: current.id + ':' + slot, romId: current.id, romName: current.name, slot, date: Date.now(), thumb, data };
+  await DB.put('states', rec);
+  buzz(25);
+  toast(slot === 0 ? 'Quick-saved' : 'Saved to slot ' + slot);
+  if (wasRunning) await play();
+  if (menuOpen) renderSlots();
+}
+async function loadSlot(slot) {
+  if (!current) return;
+  const rec = await DB.get('states', current.id + ':' + slot);
+  if (!rec) { toast(slot === 0 ? 'No quick save yet' : 'Slot ' + slot + ' is empty'); return; }
+  await applyState(rec.data);
+  buzz(25);
+  toast(slot === 0 ? 'Quick-loaded' : 'Loaded slot ' + slot);
+  if (menuOpen) closeMenu(); else await play();
+}
+async function applyState(d) {
+  await WB.loadState({
+    wasmboyMemory: {
+      wasmBoyInternalState: new Uint8Array(d.internal),
+      wasmBoyPaletteMemory: new Uint8Array(d.palette),
+      gameBoyMemory: new Uint8Array(d.memory),
+      cartridgeRam: new Uint8Array(d.ram),
+    }, date: Date.now(), isAuto: false
+  });
+}
+
+function stateToJSON(rec) {
+  return {
+    format: 'pocket-gbc-state', version: 1,
+    romId: rec.romId, romName: rec.romName, slot: rec.slot, date: rec.date, thumb: rec.thumb,
+    data: { internal: b64(rec.data.internal), palette: b64(rec.data.palette), memory: b64(rec.data.memory), ram: b64(rec.data.ram) }
+  };
+}
+function stateFromJSON(j) {
+  return {
+    key: j.romId + ':' + j.slot, romId: j.romId, romName: j.romName, slot: j.slot, date: j.date, thumb: j.thumb,
+    data: { internal: unb64(j.data.internal), palette: unb64(j.data.palette), memory: unb64(j.data.memory), ram: unb64(j.data.ram) }
+  };
+}
+async function exportOne(rec) {
+  const blob = new Blob([JSON.stringify(stateToJSON(rec))], { type: 'application/json' });
+  const label = rec.slot === 0 ? 'quick' : 'slot' + rec.slot;
+  await saveToPhone(blob, `${safeName(rec.romName)}_${label}.gbcstate`);
+}
+async function exportBundle(romIds) {
+  const states = [], savs = [];
+  for (const id of romIds) {
+    for (const s of await DB.byRom(id)) states.push(stateToJSON(s));
+    const sav = await DB.get('kv', 'sav:' + id);
+    if (sav) savs.push({ romId: id, date: sav.date, ram: b64(sav.ram) });
+  }
+  if (!states.length && !savs.length) { toast('Nothing to export yet'); return; }
+  const roms = (await DB.all('roms')).filter(r => romIds.includes(r.id)).map(r => ({ id: r.id, name: r.name }));
+  const blob = new Blob([JSON.stringify({ format: 'pocket-gbc-bundle', version: 1, date: Date.now(), roms, states, savs })], { type: 'application/json' });
+  const name = romIds.length === 1 ? safeName(roms[0] ? roms[0].name : 'game') + '_saves' : 'pocket-gbc-backup_' + new Date().toISOString().slice(0, 10);
+  await saveToPhone(blob, name + '.gbcbackup');
+}
+async function importSaveFile(file) {
+  try {
+    const j = JSON.parse(new TextDecoder().decode(await readFile(file)));
+    let n = 0;
+    if (j.format === 'pocket-gbc-state') { await DB.put('states', stateFromJSON(j)); n = 1; }
+    else if (j.format === 'pocket-gbc-bundle') {
+      for (const s of j.states) { await DB.put('states', stateFromJSON(s)); n++; }
+      for (const s of (j.savs || [])) await DB.put('kv', { ram: unb64(s.ram), date: s.date }, 'sav:' + s.romId);
+    } else throw new Error('Not a Pocket GBC save file');
+    toast(`Imported ${n} save state${n === 1 ? '' : 's'}`, 2200);
+    if (menuOpen) renderSlots(); else renderLibrary();
+  } catch (e) { toast('Import failed: ' + e.message, 2600); }
+}
+
+/* ================= Input ================= */
+const pad = { UP: false, RIGHT: false, DOWN: false, LEFT: false, A: false, B: false, SELECT: false, START: false };
+let padDirty = false;
+function pushPad() {
+  if (!padDirty) return; padDirty = false;
+  if (current) WB.setJoypadState(pad);
+  const d = $('#dpad');
+  d.classList.toggle('p-up', pad.UP); d.classList.toggle('p-down', pad.DOWN);
+  d.classList.toggle('p-left', pad.LEFT); d.classList.toggle('p-right', pad.RIGHT);
+  $('#btnA').classList.toggle('on', pad.A); $('#btnB').classList.toggle('on', pad.B);
+  $('#btnSel').classList.toggle('on', pad.SELECT); $('#btnStart').classList.toggle('on', pad.START);
+}
+function setKeys(next) {
+  let pressedNew = false;
+  for (const k in pad) {
+    const v = !!next[k];
+    if (pad[k] !== v) { if (v) pressedNew = true; pad[k] = v; padDirty = true; }
+  }
+  if (pressedNew) buzz(8);
+  pushPad();
+}
+
+// Touch: every touch is re-evaluated on each event, so sliding between buttons works.
+const controls = $('#controls');
+const touchKeys = {}, keyKeys = {}, gpKeys = {};
+function mergeKeys() { setKeys(Object.assign({}, gpKeys, keyKeys, touchKeys)); }
+
+function hitDpad(x, y) {
+  const r = $('#dpad').getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const dx = x - cx, dy = y - cy, R = r.width / 2;
+  const dist = Math.hypot(dx, dy);
+  if (dist > R * 1.45 || dist < R * 0.14) return null;
+  const a = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180, 0 = right
+  const out = {};
+  if (a > -67.5 && a < 67.5) out.RIGHT = true;
+  if (a > 22.5 && a < 157.5) out.DOWN = true;
+  if (a > 112.5 || a < -112.5) out.LEFT = true;
+  if (a < -22.5 && a > -157.5) out.UP = true;
+  return out;
+}
+function hitButton(x, y) {
+  // generous radius around A/B so thumbs between them still register
+  const out = {};
+  for (const [id, key] of [['#btnA', 'A'], ['#btnB', 'B']]) {
+    const r = $(id).getBoundingClientRect();
+    const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+    if (d < r.width * 0.72) out[key] = true;
+  }
+  for (const [id, key] of [['#btnSel', 'SELECT'], ['#btnStart', 'START']]) {
+    const r = $(id).getBoundingClientRect();
+    if (x > r.left - 14 && x < r.right + 14 && y > r.top - 18 && y < r.bottom + 22) out[key] = true;
+  }
+  return out;
+}
+function evalTouches(list) {
+  for (const k in touchKeys) delete touchKeys[k];
+  for (const t of list) {
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    if (el && el.closest('#quick, #topbar')) continue;
+    const d = hitDpad(t.clientX, t.clientY);
+    if (d) { Object.assign(touchKeys, d); continue; }
+    Object.assign(touchKeys, hitButton(t.clientX, t.clientY));
+  }
+  mergeKeys();
+}
+function onTouch(e) {
+  if (e.target.closest && e.target.closest('#quick, #topbar button')) return;
+  e.preventDefault();
+  if (!running && current && !menuOpen && e.type === 'touchstart') { play(); return; }
+  evalTouches(e.touches);
+}
+['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(t => controls.addEventListener(t, onTouch, { passive: false }));
+// Landscape: controls overlay the screen; also let a tap on the screen resume
+$('#screenWrap').addEventListener('click', () => { if (current && !running && !menuOpen) play(); });
+
+// Mouse (desktop testing)
+let mouseDown = false;
+controls.addEventListener('mousedown', e => { if (e.target.closest('#quick')) return; mouseDown = true; evalTouches([e]); });
+window.addEventListener('mousemove', e => { if (mouseDown) evalTouches([e]); });
+window.addEventListener('mouseup', () => { if (mouseDown) { mouseDown = false; evalTouches([]); } });
+
+// Keyboard
+const KEYMAP = { ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', KeyW: 'UP', KeyS: 'DOWN', KeyA: 'LEFT', KeyD: 'RIGHT',
+  KeyX: 'A', KeyK: 'A', KeyZ: 'B', KeyJ: 'B', Enter: 'START', ShiftLeft: 'SELECT', ShiftRight: 'SELECT', Backspace: 'SELECT' };
+window.addEventListener('keydown', e => {
+  if (!current || menuOpen) return;
+  if (KEYMAP[e.code]) { keyKeys[KEYMAP[e.code]] = true; mergeKeys(); e.preventDefault(); }
+  else if (e.code === 'Space' && !e.repeat) { setFF(!ffOn); e.preventDefault(); }
+  else if (e.code === 'F5' || e.code === 'KeyP') { e.preventDefault(); saveSlot(0); }
+  else if (e.code === 'F8' || e.code === 'KeyL') { e.preventDefault(); loadSlot(0); }
+  else if (e.code === 'Escape') { openMenu(); }
+});
+window.addEventListener('keyup', e => { if (KEYMAP[e.code]) { keyKeys[KEYMAP[e.code]] = false; mergeKeys(); } });
+
+// Gamepads (Bluetooth controllers)
+function pollGamepads() {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const k in gpKeys) delete gpKeys[k];
+  let any = false;
+  for (const gp of gps) {
+    if (!gp) continue; any = true;
+    const b = i => gp.buttons[i] && gp.buttons[i].pressed;
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    if (b(0)) gpKeys.A = true; if (b(1)) gpKeys.B = true;
+    if (b(2)) gpKeys.B = true; if (b(3)) gpKeys.A = true;
+    if (b(8)) gpKeys.SELECT = true; if (b(9)) gpKeys.START = true;
+    if (b(12) || ay < -0.5) gpKeys.UP = true; if (b(13) || ay > 0.5) gpKeys.DOWN = true;
+    if (b(14) || ax < -0.5) gpKeys.LEFT = true; if (b(15) || ax > 0.5) gpKeys.RIGHT = true;
+    const ffb = b(7) || b(5);
+    if (ffb !== pollGamepads.ff) { pollGamepads.ff = ffb; if (current) setFF(ffb); }
+  }
+  if (any) mergeKeys();
+  requestAnimationFrame(pollGamepads);
+}
+requestAnimationFrame(pollGamepads);
+
+/* ---- Fast-forward chip: tap = toggle, hold = hold-to-speed ---- */
+(() => {
+  const el = $('#ffChip'); let downAt = 0, wasOn = false;
+  const down = e => { e.preventDefault(); downAt = Date.now(); wasOn = ffOn; if (!ffOn) setFF(true); buzz(12); };
+  const up = e => { e.preventDefault(); const held = Date.now() - downAt > 350; if (held || wasOn) setFF(false); };
+  el.addEventListener('touchstart', down, { passive: false }); el.addEventListener('touchend', up, { passive: false });
+  el.addEventListener('mousedown', down); el.addEventListener('mouseup', up);
+})();
+
+$('#qsBtn').addEventListener('click', () => saveSlot(0));
+$('#qlBtn').addEventListener('click', () => loadSlot(0));
+
+/* ================= Layout: scale the screen ================= */
+function layout() {
+  const land = matchMedia('(orientation:landscape) and (max-height:600px)').matches;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let w, h;
+  if (land) { h = vh; w = h * 160 / 144; if (w > vw * 0.62) { w = vw * 0.62; h = w * 144 / 160; } }
+  else {
+    const maxW = Math.min(vw - 28, 640), maxH = vh * 0.5;
+    w = maxW; h = w * 144 / 160; if (h > maxH) { h = maxH; w = h * 160 / 144; }
+  }
+  canvas.style.cssText = `width:${Math.round(w)}px;height:${Math.round(h)}px;image-rendering:pixelated;display:block`;
+  // shrink controls on short portrait screens
+  const c = $('#controls');
+  if (!land) {
+    const avail = c.getBoundingClientRect().height;
+    const k = Math.max(0.72, Math.min(1.15, avail / 300, vw / 380));
+    $('#dpad').style.scale = k; $('#ab').style.scale = k;
+  } else { $('#dpad').style.scale = ''; $('#ab').style.scale = ''; }
+}
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => setTimeout(layout, 200));
+
+/* ================= Menu ================= */
+async function openMenu() {
+  if (!current) return;
+  menuOpen = true;
+  setKeys({});
+  await pause(false);
+  $('#menuTitle').textContent = current.name;
+  renderSettings();
+  await renderSlots();
+  $('#menu').classList.remove('hidden');
+}
+async function closeMenu() {
+  $('#menu').classList.add('hidden');
+  menuOpen = false;
+  await play();
+}
+$('#menuBtn').addEventListener('click', openMenu);
+$('#closeMenu').addEventListener('click', closeMenu);
+$('#menu').addEventListener('click', e => { if (e.target.id === 'menu') closeMenu(); });
+
+async function renderSlots() {
+  const states = await DB.byRom(current.id);
+  const by = {}; states.forEach(s => by[s.slot] = s);
+  const box = $('#slots'); box.innerHTML = '';
+  for (let i = 0; i <= SLOTS; i++) {
+    const s = by[i];
+    const el = document.createElement('div'); el.className = 'slot';
+    el.innerHTML = `
+      <div class="thumb">${s && s.thumb ? `<img src="${s.thumb}" alt="">` : (s ? 'saved' : 'empty')}</div>
+      <div class="meta"><b>${i === 0 ? 'Quick save' : 'Slot ' + i}</b><span>${s ? fmtDate(s.date) : ''}</span></div>
+      <div class="acts">
+        <button class="sv">Save</button>
+        <button class="ld" ${s ? '' : 'disabled'}>Load</button>
+        <button class="ex" ${s ? '' : 'disabled'} title="Save to phone">⤴</button>
+        <button class="rm" ${s ? '' : 'disabled'} title="Delete">✕</button>
+      </div>`;
+    el.querySelector('.sv').onclick = () => saveSlot(i);
+    el.querySelector('.ld').onclick = () => loadSlot(i);
+    el.querySelector('.ex').onclick = () => s && exportOne(s);
+    el.querySelector('.rm').onclick = async () => { if (s && await ask('Delete this save state?', 'Delete')) { await DB.del('states', s.key); renderSlots(); } };
+    box.appendChild(el);
+  }
+}
+
+function renderSettings() {
+  $$('#ffSpeeds button').forEach(b => b.classList.toggle('on', +b.dataset.v === settings.ffSpeed));
+  $$('[data-set]').forEach(t => t.classList.toggle('on', !!settings[t.dataset.set]));
+  $('#opacity').value = settings.opacity;
+}
+$$('#ffSpeeds button').forEach(b => b.onclick = () => { settings.ffSpeed = +b.dataset.v; saveSettings(); renderSettings(); updateFF(); });
+$$('[data-set]').forEach(t => t.onclick = () => {
+  const k = t.dataset.set; settings[k] = !settings[k]; saveSettings(); renderSettings();
+  if (k === 'sound' || k === 'ffMute') applySound();
+  if (k === 'fps') $('#fpsTag').classList.toggle('hidden', !settings.fps);
+});
+$('#opacity').oninput = e => { settings.opacity = +e.target.value; saveSettings(); applyOpacity(); };
+function applyOpacity() {
+  const land = matchMedia('(orientation:landscape) and (max-height:600px)').matches;
+  document.documentElement.style.setProperty('--pad-opacity', land ? settings.opacity / 100 : 1);
+}
+matchMedia('(orientation:landscape)').addEventListener('change', () => { applyOpacity(); layout(); });
+
+$('#resetBtn').onclick = async () => {
+  if (!(await ask('Reset the game? Progress since your last save will be lost.', 'Reset'))) return;
+  await batterySave();
+  await WB.loadROM(current.data.slice());
+  lastRam = null;
+  closeMenu();
+};
+$('#quitBtn').onclick = async () => {
+  await batterySave();
+  $('#menu').classList.add('hidden'); menuOpen = false;
+  await pause(false); running = false; setFF(false);
+  showLibrary();
+};
+$('#exportStates').onclick = () => exportBundle([current.id]);
+$('#exportSav').onclick = async () => {
+  await batterySave();
+  const sav = await DB.get('kv', 'sav:' + current.id);
+  if (!sav) { toast('This game has no battery save yet'); return; }
+  await saveToPhone(new Blob([sav.ram], { type: 'application/octet-stream' }), safeName(current.name) + '.sav');
+};
+$('#importState').onclick = () => $('#stateInput').click();
+$('#importStateLib').onclick = () => $('#stateInput').click();
+$('#exportAllBtn').onclick = async () => exportBundle((await DB.all('roms')).map(r => r.id));
+$('#stateInput').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importSaveFile(f); };
+
+/* FPS tag */
+setInterval(() => {
+  if (!settings.fps || !current) return;
+  $('#fpsTag').textContent = Math.round(WB.getFPS()) + ' fps' + (ffOn ? ' · ' + settings.ffSpeed + '×' : '');
+}, 500);
+
+/* ================= Library ================= */
+function showGame() { $('#library').classList.add('hidden'); $('#game').classList.remove('hidden'); layout(); applyOpacity(); }
+function showLibrary() { $('#game').classList.add('hidden'); $('#library').classList.remove('hidden'); renderLibrary(); }
+
+async function renderLibrary() {
+  const roms = (await DB.all('roms')).sort((a, b) => (b.lastPlayed || b.added) - (a.lastPlayed || a.added));
+  const box = $('#games'); box.innerHTML = '';
+  if (!roms.length) { box.innerHTML = '<div class="empty">No games yet — open a ROM to get started.</div>'; return; }
+  const allStates = await DB.all('states');
+  for (const r of roms) {
+    const st = allStates.filter(s => s.romId === r.id).sort((a, b) => b.date - a.date);
+    const thumb = st[0] && st[0].thumb;
+    const el = document.createElement('div'); el.className = 'game';
+    el.innerHTML = `
+      <div class="art">${thumb ? `<img src="${thumb}" alt="">` : (r.isColor ? 'GBC' : 'GB')}</div>
+      <div class="info"><div class="name"></div>
+        <div class="sub"><span class="tag">${r.isColor ? 'COLOR' : 'GB'}</span>${st.length} save${st.length === 1 ? '' : 's'}${r.lastPlayed ? ' · ' + fmtDate(r.lastPlayed) : ''}</div></div>
+      <button class="x" title="Remove">✕</button>`;
+    el.querySelector('.name').textContent = r.name;
+    el.onclick = e => { if (!e.target.closest('.x')) startGame(r); };
+    el.querySelector('.x').onclick = async () => {
+      if (!(await ask(`Remove "${r.name}" and its save states from this device?`, 'Remove'))) return;
+      await DB.del('roms', r.id);
+      for (const s of st) await DB.del('states', s.key);
+      renderLibrary();
+    };
+    box.appendChild(el);
+  }
+}
+
+async function addRomFile(file) {
+  try {
+    let data = await readFile(file), name = file.name;
+    if (/\.zip$/i.test(name) || (data[0] === 0x50 && data[1] === 0x4b)) { const z = await unzipRom(data); data = z.data; name = z.name; }
+    if (data.length < 0x150) throw new Error('That file is too small to be a Game Boy ROM');
+    const id = await hashBytes(data);
+    const h = romHeader(data);
+    let rec = await DB.get('roms', id);
+    if (!rec) {
+      rec = { id, name: name.replace(/\.(gbc|gb|cgb|sgb)$/i, '') || h.headerTitle || 'Game', headerTitle: h.headerTitle, isColor: h.isColor, size: data.length, added: Date.now(), data };
+      await DB.put('roms', rec);
+    }
+    await startGame(rec);
+  } catch (e) { toast(e.message || 'Could not open that file', 2800); }
+}
+$('#pickRom').onclick = () => $('#romInput').click();
+$('#romInput').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) addRomFile(f); };
+// Desktop drag-and-drop
+['dragover', 'drop'].forEach(t => document.addEventListener(t, e => {
+  e.preventDefault();
+  if (t === 'drop' && e.dataTransfer.files[0]) {
+    const f = e.dataTransfer.files[0];
+    /\.(gbcstate|gbcbackup)$/i.test(f.name) ? importSaveFile(f) : addRomFile(f);
+  }
+}));
+
+/* ================= PWA ================= */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+let installEvt;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#installBtn').classList.remove('hidden'); });
+$('#installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('#installBtn').classList.add('hidden'); };
+(() => {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent))
+    $('#installHint').textContent = 'To install on iPhone: tap Share → "Add to Home Screen". It then runs full-screen and works offline.';
+})();
+
+// Block pinch-zoom / double-tap zoom on iOS
+document.addEventListener('gesturestart', e => e.preventDefault());
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTouchEnd < 300 && !e.target.closest('.card, #library')) e.preventDefault(); lastTouchEnd = n; }, { passive: false });
+
+$('#fpsTag').classList.toggle('hidden', !settings.fps);
+updateFF();
+renderLibrary();
+// expose for testing
+window.__pgbc = { addRomFile, saveSlot, loadSlot, setFF, pad: setKeys, WB, DB, batterySave, exportBundle, importSaveFile, get current() { return current; } };
+</script>
+</body>
+</html>
