@@ -457,6 +457,7 @@ async function startGame(rec) {
   ffOn = false; updateFF();
   WB.setSpeed(1);
   await WB.loadROM(rec.data.slice());
+  WB.disableDefaultJoypad();          // loadROM re-enables WasmBoy's own joypad, which clobbers ours every frame
   current = rec; lastRam = null;
   layout();                          // WasmBoy rewrites the canvas style on init
   rec.lastPlayed = Date.now();
@@ -536,7 +537,16 @@ async function captureState() {
 function thumbnail() {
   try { return canvas.toDataURL('image/png'); } catch (e) { return null; }
 }
-async function saveSlot(slot) {
+// Serialize save/load so double-taps can't overlap inside the emulator core
+let stateQueue = Promise.resolve();
+function queued(fn) {
+  const run = stateQueue.then(fn).catch(e => { console.error(e); toast('Save state error — try again', 2200); if (current && running && !menuOpen) WB.play().catch(() => {}); });
+  stateQueue = run;
+  return run;
+}
+const saveSlot = slot => queued(() => _saveSlot(slot));
+const loadSlot = slot => queued(() => _loadSlot(slot));
+async function _saveSlot(slot) {
   if (!current) return;
   const wasRunning = running && !menuOpen;
   const thumb = thumbnail();
@@ -548,7 +558,7 @@ async function saveSlot(slot) {
   if (wasRunning) await play();
   if (menuOpen) renderSlots();
 }
-async function loadSlot(slot) {
+async function _loadSlot(slot) {
   if (!current) return;
   const rec = await DB.get('states', current.id + ':' + slot);
   if (!rec) { toast(slot === 0 ? 'No quick save yet' : 'Slot ' + slot + ' is empty'); return; }
@@ -625,11 +635,21 @@ function pushPad() {
   $('#btnA').classList.toggle('on', pad.A); $('#btnB').classList.toggle('on', pad.B);
   $('#btnSel').classList.toggle('on', pad.SELECT); $('#btnStart').classList.toggle('on', pad.START);
 }
+const MIN_PRESS_MS = 70;               // ~4 frames: a quick tap still registers in-game
+const pressedAt = {}, releaseTimers = {};
 function setKeys(next) {
   let pressedNew = false;
+  const now = performance.now();
   for (const k in pad) {
     const v = !!next[k];
-    if (pad[k] !== v) { if (v) pressedNew = true; pad[k] = v; padDirty = true; }
+    if (v) {
+      if (releaseTimers[k]) { clearTimeout(releaseTimers[k]); releaseTimers[k] = 0; }
+      if (!pad[k]) { pad[k] = true; pressedAt[k] = now; pressedNew = true; padDirty = true; }
+    } else if (pad[k] && !releaseTimers[k]) {
+      const held = now - (pressedAt[k] || 0);
+      if (held >= MIN_PRESS_MS) { pad[k] = false; padDirty = true; }
+      else releaseTimers[k] = setTimeout(() => { releaseTimers[k] = 0; pad[k] = false; padDirty = true; pushPad(); }, MIN_PRESS_MS - held);
+    }
   }
   if (pressedNew) buzz(8);
   pushPad();
@@ -726,6 +746,7 @@ function pollGamepads() {
     if (ffb !== pollGamepads.ff) { pollGamepads.ff = ffb; if (current) setFF(ffb); }
   }
   if (any) mergeKeys();
+  if (current && running && !menuOpen) WB.setJoypadState(pad);   // keep the core in sync every frame
   requestAnimationFrame(pollGamepads);
 }
 requestAnimationFrame(pollGamepads);
@@ -830,6 +851,7 @@ $('#resetBtn').onclick = async () => {
   if (!(await ask('Reset the game? Progress since your last save will be lost.', 'Reset'))) return;
   await batterySave();
   await WB.loadROM(current.data.slice());
+  WB.disableDefaultJoypad();
   lastRam = null;
   closeMenu();
 };
