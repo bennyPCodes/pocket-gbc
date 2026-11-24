@@ -1,5 +1,5 @@
 // Pocket GBC service worker — caches the app shell so it runs offline.
-const CACHE = 'pocket-gbc-v2';
+const CACHE = 'pocket-gbc-v3';
 const ASSETS = ['./', './index.html', './wasmboy.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', e => {

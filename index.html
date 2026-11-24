@@ -144,6 +144,8 @@ input[type=range]{width:140px;accent-color:var(--accent)}
 .game .sub{font-size:12px;color:var(--mute)}
 .game .tag{font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--panel2);color:var(--accent2);margin-right:6px}
 .game .x{padding:10px;color:var(--mute);font-size:18px}
+#resumeCard{max-width:640px;margin-bottom:14px}
+#resumeCard .game{background:linear-gradient(90deg,#3b2a66,var(--panel));box-shadow:0 0 0 1px var(--accent)}
 .empty{color:var(--mute);text-align:center;padding:20px}
 .note{font-size:12px;color:var(--mute);margin-top:18px;max-width:640px}
 #toast{position:fixed;left:50%;top:calc(56px + var(--safe-t));transform:translateX(-50%);z-index:40;
@@ -164,6 +166,7 @@ input[type=range]{width:140px;accent-color:var(--accent)}
     <div>Pick a <b>.gb</b>, <b>.gbc</b> or <b>.zip</b> ROM from your phone</div>
     <button class="btn primary" id="pickRom">＋ Open ROM</button>
   </div>
+  <div id="resumeCard" class="hidden"></div>
   <div class="games" id="games"></div>
   <div class="row" style="margin-top:18px;max-width:640px">
     <button class="btn" id="importStateLib">Import save file</button>
@@ -515,13 +518,34 @@ setInterval(() => { if (running && !document.hidden) batterySave(); }, 4000);
 
 document.addEventListener('visibilitychange', () => {
   if (!current) return;
-  if (document.hidden) { batterySave(); }
+  if (document.hidden) { batterySave(); autoSave(); }
   else if (running && !menuOpen) { setTimeout(() => play(), 150); }
 });
 window.addEventListener('pagehide', () => batterySave());
 
 /* ---- Save states ---- */
 const SLOTS = 4;
+
+/* ---- Auto-resume: snapshot in the background so a crash or app switch never loses progress ---- */
+async function _autoSave() {
+  if (!current) return;
+  const resume = running && !menuOpen && !document.hidden;
+  const thumb = thumbnail();
+  const data = await captureState();          // pauses the core briefly
+  await DB.put('kv', { romId: current.id, romName: current.name, date: Date.now(), thumb, data }, 'auto');
+  if (resume) await WB.play();
+}
+const autoSave = () => queued(_autoSave);
+setInterval(() => { if (current && running && !menuOpen && !document.hidden) autoSave(); }, 60000);
+
+async function resumeAuto() {
+  const a = await DB.get('kv', 'auto');
+  const rec = a && await DB.get('roms', a.romId);
+  if (!rec) { renderLibrary(); return; }
+  await startGame(rec);
+  await queued(async () => { await applyState(a.data); await play(); });
+  toast('Picked up where you left off');
+}
 async function captureState() {
   const s = await WB.saveState();          // pauses
   const m = s.wasmboyMemory;
@@ -857,6 +881,7 @@ $('#resetBtn').onclick = async () => {
 };
 $('#quitBtn').onclick = async () => {
   await batterySave();
+  await autoSave();
   $('#menu').classList.add('hidden'); menuOpen = false;
   await pause(false); running = false; setFF(false);
   showLibrary();
@@ -885,6 +910,16 @@ function showLibrary() { $('#game').classList.add('hidden'); $('#library').class
 
 async function renderLibrary() {
   const roms = (await DB.all('roms')).sort((a, b) => (b.lastPlayed || b.added) - (a.lastPlayed || a.added));
+  const rc = $('#resumeCard'); rc.classList.add('hidden'); rc.innerHTML = '';
+  const auto = await DB.get('kv', 'auto').catch(() => null);
+  if (auto && roms.some(r => r.id === auto.romId)) {
+    rc.innerHTML = `<div class="game"><div class="art">${auto.thumb ? `<img src="${auto.thumb}" alt="">` : '▶'}</div>
+      <div class="info"><div class="name"></div><div class="sub">Continue where you left off · ${fmtDate(auto.date)}</div></div>
+      <span style="font-size:22px;padding:0 8px">▶</span></div>`;
+    rc.querySelector('.name').textContent = auto.romName;
+    rc.onclick = resumeAuto;
+    rc.classList.remove('hidden');
+  }
   const box = $('#games'); box.innerHTML = '';
   if (!roms.length) { box.innerHTML = '<div class="empty">No games yet — open a ROM to get started.</div>'; return; }
   const allStates = await DB.all('states');
@@ -903,6 +938,7 @@ async function renderLibrary() {
       if (!(await ask(`Remove "${r.name}" and its save states from this device?`, 'Remove'))) return;
       await DB.del('roms', r.id);
       for (const s of st) await DB.del('states', s.key);
+      if (auto && auto.romId === r.id) await DB.del('kv', 'auto');
       renderLibrary();
     };
     box.appendChild(el);
@@ -957,7 +993,7 @@ $('#fpsTag').classList.toggle('hidden', !settings.fps);
 updateFF();
 renderLibrary();
 // expose for testing
-window.__pgbc = { addRomFile, saveSlot, loadSlot, setFF, pad: setKeys, WB, DB, batterySave, exportBundle, importSaveFile, get current() { return current; } };
+window.__pgbc = { addRomFile, saveSlot, loadSlot, autoSave, setFF, pad: setKeys, WB, DB, batterySave, exportBundle, importSaveFile, get current() { return current; } };
 </script>
 </body>
 </html>
