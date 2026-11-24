@@ -235,7 +235,7 @@ input[type=range]{width:140px;accent-color:var(--accent)}
         <button data-v="2">2×</button><button data-v="3">3×</button><button data-v="4">4×</button><button data-v="8">8×</button>
       </div></div>
     <div class="setting"><span>Mute while fast-forwarding</span><button class="toggle" data-set="ffMute"></button></div>
-    <div class="setting"><span>Sound</span><button class="toggle" data-set="sound"></button></div>
+    <div class="setting"><span>Sound <small style="color:var(--mute)">(off saves battery &amp; memory)</small></span><button class="toggle" data-set="audio"></button></div>
     <div class="setting"><span>Vibrate on press <small style="color:var(--mute)">(Android)</small></span><button class="toggle" data-set="haptics"></button></div>
     <div class="setting"><span>Show FPS</span><button class="toggle" data-set="fps"></button></div>
     <div class="setting"><span>Button opacity (landscape)</span><input type="range" min="15" max="100" id="opacity"></div>
@@ -307,7 +307,7 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 
 /* ================= Settings ================= */
 const settings = Object.assign(
-  { ffSpeed: 2, ffMute: false, sound: true, haptics: true, fps: false, opacity: 55 },
+  { ffSpeed: 2, ffMute: false, audio: false, haptics: true, fps: false, opacity: 55 },
   JSON.parse(localStorage.getItem('pgbc-settings') || '{}'));
 const saveSettings = () => localStorage.setItem('pgbc-settings', JSON.stringify(settings));
 
@@ -408,13 +408,14 @@ let running = false;         // user intent: game should be running
 let menuOpen = false;
 let ffOn = false;
 let lastRam = null;
-let emuReady = false;
+let emuReady = false, emuAudio = null;
 
 async function initEmu() {
-  if (emuReady) return;
+  if (emuReady && emuAudio === settings.audio) return;
+  emuAudio = settings.audio;
   await WB.config({
     headless: false,
-    isAudioEnabled: true,
+    isAudioEnabled: settings.audio,   // when off, the core produces no audio at all
     isGbcEnabled: true,
     isGbcColorizationEnabled: true,
     enableBootROMIfAvailable: false,
@@ -432,7 +433,7 @@ async function initEmu() {
 function applySound() {
   try {
     const ch = WB._getAudioChannels();
-    const mute = !settings.sound || (ffOn && settings.ffMute);
+    const mute = !settings.audio || (ffOn && settings.ffMute);
     ['channel1', 'channel2', 'channel3', 'channel4'].forEach(k => ch[k] && (mute ? ch[k].mute() : ch[k].unmute()));
   } catch (e) {}
 }
@@ -449,6 +450,21 @@ async function play() {
 async function pause(showOverlay = true) {
   await WB.pause();
   if (showOverlay) $('#pausedOverlay').classList.remove('hidden');
+}
+
+async function toggleAudioEngine() {
+  if (!current) return;
+  await queued(async () => {
+    const data = await captureState();
+    await batterySave();
+    await initEmu();
+    await WB.loadROM(current.data.slice());
+    WB.disableDefaultJoypad();
+    layout();
+    await applyState(data);
+    applySound();
+  });
+  toast(settings.audio ? 'Sound on' : 'Sound off');
 }
 
 async function startGame(rec) {
@@ -861,7 +877,8 @@ function renderSettings() {
 $$('#ffSpeeds button').forEach(b => b.onclick = () => { settings.ffSpeed = +b.dataset.v; saveSettings(); renderSettings(); updateFF(); });
 $$('[data-set]').forEach(t => t.onclick = () => {
   const k = t.dataset.set; settings[k] = !settings[k]; saveSettings(); renderSettings();
-  if (k === 'sound' || k === 'ffMute') applySound();
+  if (k === 'ffMute') applySound();
+  if (k === 'audio') toggleAudioEngine();
   if (k === 'fps') $('#fpsTag').classList.toggle('hidden', !settings.fps);
 });
 $('#opacity').oninput = e => { settings.opacity = +e.target.value; saveSettings(); applyOpacity(); };
